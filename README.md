@@ -7,7 +7,7 @@ this repository contains code and test material for a single leg prototype for a
 get a cubemars ak40-10 motor moving from a pc keyboard through uart before moving to stm32 control.
 
 ## hardware used
-
+For the test modes in the associated script, only a PC is required
 - cubemars ak40-10
 - usb serial adapter
 - jst gh to uart connection
