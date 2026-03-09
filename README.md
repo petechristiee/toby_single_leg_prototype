@@ -7,11 +7,62 @@ this repository contains code and test material for a single leg prototype for a
 get a cubemars ak40-10 motor moving from a pc keyboard through uart before moving to stm32 control.
 
 ## hardware used
-For the test modes in the associated script, only a PC is required
+
 - cubemars ak40-10
 - usb serial adapter
 - jst gh to uart connection
 - windows pc
+
+## what uart means in this project
+
+uart stands for **universal asynchronous receiver-transmitter**.
+
+for this project, uart is the serial communication link between the pc and the motor. the script does not control the motor through the cubemars upper computer software. instead, it sends command packets directly through a **usb serial adapter**.
+
+the communication path is:
+
+```text
+pc running python script
+-> usb serial adapter
+-> jst gh uart cable
+-> cubemars motor uart port
+```
+
+in simple terms:
+- the pc runs the python script
+- the script opens a **com port** on windows
+- the usb serial adapter turns that pc serial connection into a uart connection
+- the motor receives the uart command packets and responds to them
+
+this is why the script asks for a **com port** in serial dry run mode and live motor mode.
+
+## before running anything
+
+download the script file from this repository first.
+
+the script file should be named:
+
+```text
+motor_keyboard_test.py
+```
+
+a simple option is to download it into your downloads folder, for example:
+
+```text
+C:\Users\Owner\Downloads
+```
+
+make sure the file is actually saved as:
+
+```text
+motor_keyboard_test.py
+```
+
+and not:
+
+```text
+motor_keyboard_test.py.txt
+```
 
 ## software needed
 
@@ -29,7 +80,7 @@ py -m pip install pyserial
 
 ## how to run the script
 
-once the installs are complete, run the script from command prompt using:
+once the script has been downloaded and the installs are complete, run the script from command prompt using:
 
 ```bash
 py "FILE PATH OF motor_keyboard_test.py"
@@ -83,11 +134,13 @@ the script converts these to erpm internally for cubemars servo uart commands.
 
 ## recommended testing order
 
-1. run **mode 1** first
-2. confirm keyboard controls and live graph work
-3. run **mode 2** second
-4. confirm the correct com port opens and packet output looks normal
-5. run **mode 3** only after the motor is safely mounted and ready for live testing
+1. download `motor_keyboard_test.py`
+2. install the required python packages
+3. run **mode 1** first
+4. confirm keyboard controls and live graph work
+5. run **mode 2** second
+6. confirm the correct com port opens and packet output looks normal
+7. run **mode 3** only after the motor is safely mounted and ready for live testing
 
 ## serial setup
 
@@ -101,6 +154,17 @@ to list available serial ports, run:
 ```bash
 py -m serial.tools.list_ports
 ```
+
+## how uart relates to the com port
+
+on windows, the usb serial adapter usually appears as a **com port** such as `COM3` or `COM5`.
+
+that means:
+- the adapter is plugged into the pc
+- windows has recognized it
+- the python script can try to open that serial connection
+
+if the wrong com port is selected, the script will not be able to talk to the motor.
 
 ## important notes
 
@@ -130,6 +194,7 @@ make sure:
 
 - python is installed
 - the packages are installed
+- the script file was downloaded first
 - you are using the correct file path
 - the file is actually named `motor_keyboard_test.py` and not `motor_keyboard_test.py.txt`
 
