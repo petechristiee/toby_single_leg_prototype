@@ -1,406 +1,679 @@
-# toby_single_leg_prototype
+"""
+pre-run checklist
 
-this repository contains code and test material for a single leg prototype for a future quadruped robot.
+1. install required packages:
+   py -m pip install keyboard matplotlib pyserial python-can
 
-## current goal
+2. for modes 1-3 (servo uart):
+   - connect power correctly
+   - connect jst gh uart cable to motor uart port
+   - connect usb serial adapter to pc
+   - know the correct com port
+   - make sure the motor is in the expected servo-uart workflow
 
-get a cubemars ak40-10 motor moving from a pc keyboard through **servo-mode uart**, while also building a **mit can** testing path for future quadruped-style control and STM32 integration.
+3. for modes 4-5 (mit can):
+   - use a usb-to-can adapter, not just a usb serial adapter
+   - know the correct can interface / channel / bitrate
+   - know the motor can id
+   - start with very small commands only
 
-## hardware used
+4. safe testing order:
+   - mode 1 first
+   - mode 2 second
+   - mode 3 third
+   - mode 5 fourth
+   - mode 4 last
 
-- cubemars ak40-10
-- power supply
-- usb serial adapter
-- jst gh to uart connection
-- windows pc
-- usb-to-can adapter for mit can testing
-
-## before running anything
-
-download the script file from this repository first.
-
-the script file should be named:
-
-```text
-motor_keyboard_test.py
-```
-
-a simple option is to download it into your downloads folder, for example:
-
-```text
-C:\Users\Owner\Downloads
-```
-
-make sure the file is actually saved as:
-
-```text
-motor_keyboard_test.py
-```
-
-and not:
-
-```text
-motor_keyboard_test.py.txt
-```
-
-## software needed
-
-install the required python packages in command prompt:
-
-```bash
-py -m pip install keyboard matplotlib pyserial python-can
-```
-
-if needed, you can also install packages individually:
-
-```bash
-py -m pip install keyboard
-py -m pip install matplotlib
-py -m pip install pyserial
-py -m pip install python-can
-```
-
-## how to run the script
-
-once the script has been downloaded and the installs are complete, run the script from command prompt using:
-
-```bash
-py "FILE PATH OF motor_keyboard_test.py"
-```
-
-for example, if the script is in your downloads folder:
-
-```bash
-py "C:\Users\Owner\Downloads\motor_keyboard_test.py"
-```
-
-you can also move into the folder first and then run:
-
-```bash
-cd %USERPROFILE%\Downloads
-py motor_keyboard_test.py
-```
-
-## communication overview
-
-this project now includes **two communication paths**:
-
-### servo uart path
-used for:
-- mode 2 = servo uart dry run
-- mode 3 = live servo uart motor control
-
-hardware path:
-
-```text
-pc running python script
--> usb serial adapter
--> jst gh uart cable
--> cubemars motor uart port
-```
-
-### mit can path
-used for:
-- mode 4 = live mit can mode
-- mode 5 = mit can dry run
-
-hardware path:
-
-```text
-pc running python script
--> usb-to-can adapter
--> can connection
--> motor can interface
-```
+5. live test safety:
+   - secure the motor
+   - keep it unloaded at first
+   - be ready to cut power
+   - use e for emergency stop
+   - use q to quit
 
 important note:
-- **servo uart** and **mit can** are not the same workflow
-- modes 2 and 3 use **uart**
-- modes 4 and 5 use **can**
-- for mit testing, you need a **usb-to-can adapter**, not only a usb serial adapter
-
-## script modes
-
-when the script starts, it will ask you to choose a mode:
-
-- `1` = test mode  
-  only prints the commanded speed and shows the live graph
-
-- `2` = serial dry run (**servo uart**)  
-  opens the serial setup and shows what would be sent, but does not actually move the motor
-
-- `3` = live motor mode (**servo uart**)  
-  opens the serial port and sends the real servo-mode uart motor command packet
-
-- `4` = mit mode (**can**)  
-  opens the can interface and sends live mit-style can commands
-
-- `5` = mit can dry run  
-  does not send live can traffic, but shows the mit can packet data that would be transmitted
-
-## controls
-
-- hold `d` = clockwise at medium speed
-- hold `a` = counterclockwise at medium speed
-- hold `w` + `d` or `a` = faster
-- hold `s` + `d` or `a` = slower
-- press `e` = emergency stop
-- press `r` = reset emergency stop
-- press `q` = quit
-
-## speed setup
-
-the script currently uses output shaft speed values in rad/s:
-
-- slow = `1.5`
-- medium = `3.0`
-- fast = `4.5`
-
-for servo uart mode, the script converts these internally to **erpm** before building the final packet.
-
-## recommended testing order
-
-1. download `motor_keyboard_test.py`
-2. install the required python packages
-3. run **mode 1** first
-4. confirm keyboard controls and live graph work
-5. run **mode 2** second
-6. confirm the correct com port opens and servo packet output looks normal
-7. run **mode 3** only after the motor is safely mounted and ready for live testing
-8. run **mode 5** before trying live mit can
-9. run **mode 4** last, only after the can setup is known and safe
-
-## servo uart setup
-
-for mode 2 or mode 3, the script will ask for:
-
-- com port, for example `COM3`
-- baud rate, or press enter to use `115200`
-
-to list available serial ports, run:
-
-```bash
-py -m serial.tools.list_ports
-```
-
-on windows, the usb serial adapter usually appears as a **com port** such as `COM3` or `COM5`.
-
-that means:
-- the adapter is plugged into the pc
-- windows has recognized it
-- the python script can try to open that serial connection
-
-if the wrong com port is selected, the script will not be able to talk to the motor.
-
-## mit can setup
-
-for mode 4 or mode 5, the script will ask for:
-
-- can interface, for example `pcan`
-- can channel, for example `PCAN_USBBUS1`
-- can bitrate, default `1000000`
-- motor can id
-- default mit values such as `kp`, `kd`, and torque feedforward
-
-important note:
-- you need a **usb-to-can adapter** for mit can modes
-- mode 5 is the safest way to inspect the can packets before sending anything live
-- the mit can implementation in this project is a practical starting point and may need adjustment depending on the exact cubemars firmware or protocol generation
-
-## servo packet format used by the current script
-
-the current live servo script is based on a framed servo-uart packet workflow.
-
-the packet structure used in the script is:
-
-- frame head = `0x02`
-- data length
-- data frame
-- checksum
-- frame tail = `0x03`
-
-for speed control, the script uses command id:
-
-- `0x08`
-
-the speed value is sent as **erpm**.
-
-the script starts from output shaft speed in **rad/s**, then converts it internally to **erpm** before building the final packet.
-
-## mit can packet notes
-
-the mit can part of the script uses:
-- packed 8-byte command data
-- desired position
-- desired velocity
-- `kp`
-- `kd`
-- torque feedforward
-
-mode 4 sends live mit can commands.
-
-mode 5 prints the packet bytes only, so you can inspect the data before doing live testing.
-
-the current mit packing in this repository should be treated as a **legacy-style starting point**, not a guaranteed final implementation for every cubemars firmware version.
-
-## cubemars upper computer setup for ak40-10
-
-before starting, download the CubeMars Upper Computer software from:
-
-```text
-https://www.cubemars.com/technical-support-and-software-download.html
-```
-
-for this setup:
-- model = **AK40-10**
-- software version = **V1.32**
-
-## upper computer connection steps
-
-1. connect the **power/ground cable** to the motor’s middle port
-2. connect the other ends to the **power supply ground and power**
-3. turn the **power supply on**, but do **not** raise the voltage above zero yet
-4. connect the **JST GH connector** to the motor’s **UART port**
-5. connect the other end of the JST GH cable to a **USB serial adapter**
-6. plug the USB serial adapter into the PC
-7. open the **Upper Computer `.exe`**
-8. accept the Windows warning if prompted
-9. if the language is not correct, toggle the language button in the bottom left
-10. click **Refresh** to display available serial / COM ports
-11. select the COM port connected to the UART adapter
-12. click **CONNECT**
-13. you should see **Connected** in the bottom right of the screen
-
-## if upper computer does not show connected
-
-if you do **not** see **Connected**, do this:
-
-1. enter the **mit control** section
-2. press **Debug**
-3. this opens the serial terminal
-4. **MIT Mode** in the top right should turn red
-5. a warning should pop up saying the connected driver is now in MIT mode
-6. now give the motor about **20–24 V**
-7. motor parameters should now appear in the middle of the screen
-
-## if debug was not needed
-
-if the connection worked normally:
-
-1. raise the power supply to about **20–24 V**
-2. you should now see the **time (s)** axis for the graphs moving
-3. you can explore the basic settings under **servo / mit mode**
-
-## encoder calibration
-
-if encoder calibration is needed:
-
-1. type the command:
-
-```text
-calibrate
-```
-
-2. include a space after the word when sending it if required by the software workflow
-3. click **send command**
-4. the motor may move slightly while phase order is checked
-5. the software should generate a lookup table mapping angle information for the motor
-
-## changing can id
-
-each motor needs a unique can id so there is no communication conflict.
-
-to change the can id, send:
-
-```text
-set_can_id XX
-```
-
-replace `XX` with the desired can id number.
-
-## using the python script with upper computer
-
-in **mode 3**, the python script sends live **servo uart** motor commands.
-
-during real testing in **mode 3**, the CubeMars Upper Computer may display the **actual behaviour of the motor**, such as live response and graph movement, if the motor and software are connected properly.
-
-important note:
-
-- the upper computer and the python script usually cannot control the **same serial / com port at the same time**
-- the current live uart script is intended for **servo uart testing**
-- mit can testing should be treated as a separate control path
-
-## modifying the script
-
-the script may be modified to test other parameters, such as:
-- different speed values
-- different key mappings
-- different control logic
-- different default mit values
-- other safe test conditions
-
-only do this if the changes are **safe** and the motor is securely mounted.
-
-recommended rules when modifying the script:
-- start with low speeds
-- keep the motor unloaded at first
-- secure the motor before live motion
-- test one change at a time
-- be ready to cut power immediately if behaviour is unexpected
-
-## important notes
-
-- modes 2 and 3 are for **servo uart**
-- modes 4 and 5 are for **mit can**
-- speeds are treated as output **rad/s** in the script
-- the servo-uart path converts rad/s to **erpm**
-- the motor should be securely mounted before any live mode is used
-- test mode and dry run modes should be used before live modes
-- upper computer can be useful for confirming motor response and viewing live behaviour during setup and testing
-- mit can live mode may need adjustment depending on the exact cubemars firmware or protocol generation
-
-## if packages are missing
-
-if you get a module error, install the required packages again:
-
-```bash
-py -m pip install keyboard matplotlib pyserial python-can
-```
-
-or install a missing package by itself, for example:
-
-```bash
-py -m pip install keyboard
-py -m pip install matplotlib
-py -m pip install pyserial
-py -m pip install python-can
-```
-
-## if the script will not run
-
-make sure:
-
-- python is installed
-- the packages are installed
-- the script file was downloaded first
-- you are using the correct file path
-- the file is actually named `motor_keyboard_test.py` and not `motor_keyboard_test.py.txt`
-
-## example run command
-
-for this setup, the script was run with:
-
-```bash
-py "C:\Users\Owner\Downloads\motor_keyboard_test.py"
-```
-
-## project status
-
-current focus:
-
-- pc keyboard testing
-- servo uart communication
-- mit can packet testing
-- upper computer verification
-- safe speed testing
-- preparing for later stm32 integration
+- mode 3 is for servo uart
+- mode 4 is for mit can live control
+- mode 5 is for mit can dry run only
+- mit can packing may need adjustment depending on the exact cubemars firmware/protocol generation
+"""
+
+import keyboard
+import time
+import math
+import matplotlib.pyplot as plt
+from collections import deque
+import serial
+import can
+
+# -----------------------------
+# speed values in output rad/s
+# -----------------------------
+slow_speed = 1.5
+medium_speed = 3.0
+fast_speed = 4.5
+
+# -----------------------------
+# ak40-10 conversion values for output rad/s -> erpm
+# -----------------------------
+reduction_ratio = 10
+pole_pairs = 14
+
+# -----------------------------
+# flip these if direction feels backwards
+# -----------------------------
+cw_sign = 1
+ccw_sign = -1
+
+# -----------------------------
+# emergency stop flag
+# -----------------------------
+estop_active = False
+
+# -----------------------------
+# graph settings
+# -----------------------------
+max_points = 300
+times = deque(maxlen=max_points)
+speeds = deque(maxlen=max_points)
+start_time = time.time()
+
+# -----------------------------
+# serial settings for servo uart modes
+# -----------------------------
+mode = 1
+com_port = None
+baud_rate = 115200
+serial_timeout = 0.1
+ser = None
+
+# -----------------------------
+# can settings for mit mode
+# these are example defaults only
+# -----------------------------
+can_interface = "pcan"
+can_channel = "PCAN_USBBUS1"
+can_bitrate = 1000000
+can_bus = None
+motor_can_id = 1
+
+# -----------------------------
+# mit mode defaults
+# these are conservative placeholders
+# -----------------------------
+mit_kp_default = 0.0
+mit_kd_default = 1.0
+mit_torque_ff_default = 0.0
+
+# legacy-style mit packing ranges
+# these may need adjustment for your exact motor/firmware
+P_MIN = -12.5
+P_MAX = 12.5
+V_MIN = -50.0
+V_MAX = 50.0
+KP_MIN = 0.0
+KP_MAX = 500.0
+KD_MIN = 0.0
+KD_MAX = 5.0
+T_MIN = -18.0
+T_MAX = 18.0
+
+
+# -----------------------------
+# convert output rad/s to erpm
+# -----------------------------
+def rad_s_to_erpm(rad_s):
+    output_rpm = rad_s * 60.0 / (2.0 * math.pi)
+    motor_rpm = output_rpm * reduction_ratio
+    erpm = motor_rpm * pole_pairs
+    return int(round(erpm))
+
+
+# -----------------------------
+# crc16 for cubemars servo uart packet
+# -----------------------------
+def crc16_ccitt(data):
+    crc = 0
+    for byte in data:
+        crc ^= (byte << 8)
+        for _ in range(8):
+            if crc & 0x8000:
+                crc = ((crc << 1) ^ 0x1021) & 0xFFFF
+            else:
+                crc = (crc << 1) & 0xFFFF
+    return crc
+
+
+# -----------------------------
+# signed int32 to 4 bytes
+# -----------------------------
+def int32_to_bytes(value):
+    return value.to_bytes(4, byteorder="big", signed=True)
+
+
+# -----------------------------
+# build cubemars servo speed packet
+# -----------------------------
+def build_servo_speed_packet(erpm):
+    command_id = 0x08
+    payload = bytes([command_id]) + int32_to_bytes(erpm)
+    data_length = len(payload)
+
+    crc = crc16_ccitt(payload)
+    crc_hi = (crc >> 8) & 0xFF
+    crc_lo = crc & 0xFF
+
+    packet = bytes([0x02, data_length]) + payload + bytes([crc_hi, crc_lo, 0x03])
+    return packet
+
+
+# -----------------------------
+# mit helpers
+# -----------------------------
+def float_to_uint(x, x_min, x_max, bits):
+    span = x_max - x_min
+    if span <= 0:
+        raise ValueError("invalid range")
+    x = max(min(x, x_max), x_min)
+    return int((x - x_min) * ((1 << bits) - 1) / span)
+
+
+def uint_to_float(x_int, x_min, x_max, bits):
+    span = x_max - x_min
+    return float(x_int) * span / ((1 << bits) - 1) + x_min
+
+
+# -----------------------------
+# build legacy-style mit can packet
+# this may need adjustment for exact firmware generation
+# -----------------------------
+def build_mit_can_packet_legacy(p_des, v_des, kp, kd, t_ff):
+    p_int = float_to_uint(p_des, P_MIN, P_MAX, 16)
+    v_int = float_to_uint(v_des, V_MIN, V_MAX, 12)
+    kp_int = float_to_uint(kp, KP_MIN, KP_MAX, 12)
+    kd_int = float_to_uint(kd, KD_MIN, KD_MAX, 12)
+    t_int = float_to_uint(t_ff, T_MIN, T_MAX, 12)
+
+    data = [0] * 8
+    data[0] = (p_int >> 8) & 0xFF
+    data[1] = p_int & 0xFF
+    data[2] = (v_int >> 4) & 0xFF
+    data[3] = ((v_int & 0xF) << 4) | ((kp_int >> 8) & 0xF)
+    data[4] = kp_int & 0xFF
+    data[5] = (kd_int >> 4) & 0xFF
+    data[6] = ((kd_int & 0xF) << 4) | ((t_int >> 8) & 0xF)
+    data[7] = t_int & 0xFF
+
+    return data
+
+
+# -----------------------------
+# ask which mode to run
+# -----------------------------
+def choose_mode():
+    while True:
+        print("")
+        print("choose a mode:")
+        print("1 = test mode")
+        print("2 = serial dry run (servo uart)")
+        print("3 = live motor mode (servo uart)")
+        print("4 = mit mode (can)")
+        print("5 = mit can dry run")
+        choice = input("enter 1, 2, 3, 4, or 5: ").strip()
+
+        if choice in ["1", "2", "3", "4", "5"]:
+            return int(choice)
+        else:
+            print("invalid choice, try again")
+
+
+# -----------------------------
+# ask for serial settings if needed
+# -----------------------------
+def get_serial_settings():
+    global com_port, baud_rate
+
+    print("")
+    com_port = input("enter the com port for the usb serial adapter (example: COM3): ").strip()
+
+    baud_input = input("enter baud rate or press enter to use 115200: ").strip()
+    if baud_input != "":
+        try:
+            baud_rate = int(baud_input)
+        except ValueError:
+            print("invalid baud rate, using 115200")
+            baud_rate = 115200
+
+
+# -----------------------------
+# ask for can settings if needed
+# -----------------------------
+def get_can_settings():
+    global can_interface, can_channel, can_bitrate, motor_can_id
+    global mit_kp_default, mit_kd_default, mit_torque_ff_default
+
+    print("")
+    can_interface = input("enter can interface (example: pcan): ").strip() or "pcan"
+    can_channel = input("enter can channel (example: PCAN_USBBUS1): ").strip() or "PCAN_USBBUS1"
+
+    bitrate_input = input("enter can bitrate or press enter to use 1000000: ").strip()
+    if bitrate_input != "":
+        try:
+            can_bitrate = int(bitrate_input)
+        except ValueError:
+            print("invalid bitrate, using 1000000")
+            can_bitrate = 1000000
+
+    can_id_input = input("enter motor can id or press enter to use 1: ").strip()
+    if can_id_input != "":
+        try:
+            motor_can_id = int(can_id_input)
+        except ValueError:
+            print("invalid motor can id, using 1")
+            motor_can_id = 1
+
+    kp_input = input("enter default mit kp or press enter to use 0.0: ").strip()
+    if kp_input != "":
+        try:
+            mit_kp_default = float(kp_input)
+        except ValueError:
+            print("invalid kp, using 0.0")
+            mit_kp_default = 0.0
+
+    kd_input = input("enter default mit kd or press enter to use 1.0: ").strip()
+    if kd_input != "":
+        try:
+            mit_kd_default = float(kd_input)
+        except ValueError:
+            print("invalid kd, using 1.0")
+            mit_kd_default = 1.0
+
+    torque_input = input("enter default mit torque feedforward or press enter to use 0.0: ").strip()
+    if torque_input != "":
+        try:
+            mit_torque_ff_default = float(torque_input)
+        except ValueError:
+            print("invalid torque ff, using 0.0")
+            mit_torque_ff_default = 0.0
+
+
+# -----------------------------
+# open serial port
+# -----------------------------
+def open_motor_port():
+    global ser
+    try:
+        ser = serial.Serial(com_port, baud_rate, timeout=serial_timeout)
+        time.sleep(2)
+        print(f"opened serial port {com_port} at {baud_rate} baud")
+    except Exception as e:
+        print(f"could not open serial port: {e}")
+        ser = None
+
+
+# -----------------------------
+# open can bus
+# -----------------------------
+def open_can_bus():
+    global can_bus
+    try:
+        can_bus = can.Bus(interface=can_interface, channel=can_channel, bitrate=can_bitrate)
+        print(f"opened can bus: interface={can_interface}, channel={can_channel}, bitrate={can_bitrate}")
+    except Exception as e:
+        print(f"could not open can bus: {e}")
+        can_bus = None
+
+
+# -----------------------------
+# mit special commands
+# -----------------------------
+def mit_enter_motor_mode():
+    global can_bus
+    if can_bus is None:
+        print("can bus is not open")
+        return
+
+    msg = can.Message(
+        arbitration_id=motor_can_id,
+        data=[0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFC],
+        is_extended_id=False
+    )
+    can_bus.send(msg)
+    print("sent mit enter motor mode")
+
+
+def mit_exit_motor_mode():
+    global can_bus
+    if can_bus is None:
+        print("can bus is not open")
+        return
+
+    msg = can.Message(
+        arbitration_id=motor_can_id,
+        data=[0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFD],
+        is_extended_id=False
+    )
+    can_bus.send(msg)
+    print("sent mit exit motor mode")
+
+
+def mit_set_zero():
+    global can_bus
+    if can_bus is None:
+        print("can bus is not open")
+        return
+
+    msg = can.Message(
+        arbitration_id=motor_can_id,
+        data=[0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE],
+        is_extended_id=False
+    )
+    can_bus.send(msg)
+    print("sent mit set zero")
+
+
+# -----------------------------
+# mode 1
+# -----------------------------
+def send_speed_command_test(speed):
+    erpm = rad_s_to_erpm(speed)
+    print(f"test mode -> {speed:.2f} rad/s  |  approx {erpm} erpm")
+
+
+# -----------------------------
+# mode 2
+# -----------------------------
+def send_speed_command_dry_run(speed):
+    erpm = rad_s_to_erpm(speed)
+
+    if erpm > 50000:
+        erpm = 50000
+    elif erpm < -50000:
+        erpm = -50000
+
+    packet = build_servo_speed_packet(erpm)
+    print(f"dry run -> {speed:.2f} rad/s  |  {erpm} erpm  |  packet: {packet.hex(' ')}")
+
+
+# -----------------------------
+# mode 3
+# -----------------------------
+def send_speed_command_real(speed):
+    global ser
+
+    if ser is None:
+        print("serial port is not open")
+        return
+
+    try:
+        erpm = rad_s_to_erpm(speed)
+
+        if erpm > 50000:
+            erpm = 50000
+        elif erpm < -50000:
+            erpm = -50000
+
+        packet = build_servo_speed_packet(erpm)
+        ser.write(packet)
+
+        print(f"live servo uart -> sent {speed:.2f} rad/s  |  {erpm} erpm")
+
+    except Exception as e:
+        print(f"serial write failed: {e}")
+
+
+# -----------------------------
+# mode 4
+# -----------------------------
+def send_mit_can_command(p_des, v_des, kp, kd, t_ff):
+    global can_bus
+
+    if can_bus is None:
+        print("can bus is not open")
+        return
+
+    try:
+        data = build_mit_can_packet_legacy(p_des, v_des, kp, kd, t_ff)
+        msg = can.Message(
+            arbitration_id=motor_can_id,
+            data=data,
+            is_extended_id=False
+        )
+        can_bus.send(msg)
+        print(f"mit can -> p={p_des:.2f}, v={v_des:.2f}, kp={kp:.2f}, kd={kd:.2f}, t={t_ff:.2f}")
+    except Exception as e:
+        print(f"mit can send failed: {e}")
+
+
+# -----------------------------
+# mode 5
+# -----------------------------
+def send_mit_can_dry_run(p_des, v_des, kp, kd, t_ff):
+    try:
+        data = build_mit_can_packet_legacy(p_des, v_des, kp, kd, t_ff)
+        print(
+            f"mit dry run -> "
+            f"p={p_des:.2f}, v={v_des:.2f}, kp={kp:.2f}, kd={kd:.2f}, t={t_ff:.2f}  |  "
+            f"can id={motor_can_id}  |  data: {' '.join(f'{byte:02X}' for byte in data)}"
+        )
+    except Exception as e:
+        print(f"mit dry run failed: {e}")
+
+
+# -----------------------------
+# wrapper
+# -----------------------------
+def send_speed_command(speed):
+    if mode == 1:
+        send_speed_command_test(speed)
+    elif mode == 2:
+        send_speed_command_dry_run(speed)
+    elif mode == 3:
+        send_speed_command_real(speed)
+    elif mode == 4:
+        send_mit_can_command(
+            p_des=0.0,
+            v_des=speed,
+            kp=mit_kp_default,
+            kd=mit_kd_default,
+            t_ff=mit_torque_ff_default
+        )
+    elif mode == 5:
+        send_mit_can_dry_run(
+            p_des=0.0,
+            v_des=speed,
+            kp=mit_kp_default,
+            kd=mit_kd_default,
+            t_ff=mit_torque_ff_default
+        )
+
+
+# -----------------------------
+# repeated zero commands for stop
+# -----------------------------
+def emergency_stop():
+    if mode in [1, 2, 3]:
+        for _ in range(5):
+            send_speed_command(0.0)
+            time.sleep(0.02)
+    elif mode == 4:
+        for _ in range(5):
+            send_mit_can_command(
+                p_des=0.0,
+                v_des=0.0,
+                kp=mit_kp_default,
+                kd=mit_kd_default,
+                t_ff=0.0
+            )
+            time.sleep(0.02)
+    elif mode == 5:
+        for _ in range(5):
+            send_mit_can_dry_run(
+                p_des=0.0,
+                v_des=0.0,
+                kp=mit_kp_default,
+                kd=mit_kd_default,
+                t_ff=0.0
+            )
+            time.sleep(0.02)
+
+
+# -----------------------------
+# choose mode
+# -----------------------------
+mode = choose_mode()
+
+if mode in [2, 3]:
+    get_serial_settings()
+    open_motor_port()
+elif mode == 4:
+    get_can_settings()
+    open_can_bus()
+    if can_bus is not None:
+        enter_choice = input("send MIT enter motor mode command now? (y/n): ").strip().lower()
+        if enter_choice == "y":
+            mit_enter_motor_mode()
+
+        zero_choice = input("send MIT set zero command now? (y/n): ").strip().lower()
+        if zero_choice == "y":
+            mit_set_zero()
+elif mode == 5:
+    get_can_settings()
+
+# -----------------------------
+# graph setup
+# -----------------------------
+plt.ion()
+fig, ax = plt.subplots()
+line, = ax.plot([], [])
+ax.set_title("commanded motor speed")
+ax.set_xlabel("time (s)")
+ax.set_ylabel("speed (rad/s)")
+ax.grid(True)
+ax.set_ylim(-fast_speed * 1.2, fast_speed * 1.2)
+
+print("")
+print("controls:")
+print("hold d = clockwise at medium speed")
+print("hold a = counterclockwise at medium speed")
+print("hold w + d or a = faster")
+print("hold s + d or a = slower")
+print("press e = emergency stop")
+print("press r = reset emergency stop")
+print("press q = quit")
+
+print("")
+print("speed setup:")
+print(f"slow   = {slow_speed:.2f} rad/s")
+print(f"medium = {medium_speed:.2f} rad/s")
+print(f"fast   = {fast_speed:.2f} rad/s")
+
+if mode == 1:
+    print("running in test mode")
+elif mode == 2:
+    print("running in serial dry run mode (servo uart)")
+elif mode == 3:
+    print("running in live motor mode (servo uart)")
+elif mode == 4:
+    print("running in mit mode (can)")
+    print("warning: this mit implementation may need adjustment for your exact cubemars firmware/protocol generation")
+elif mode == 5:
+    print("running in mit can dry run mode")
+    print("no live can messages will be sent")
+
+last_speed = 0.0
+
+try:
+    while True:
+        # quit program
+        if keyboard.is_pressed('q'):
+            emergency_stop()
+            if mode == 4 and can_bus is not None:
+                exit_choice = input("send MIT exit motor mode command before closing? (y/n): ").strip().lower()
+                if exit_choice == "y":
+                    mit_exit_motor_mode()
+            print("program ended")
+            break
+
+        # emergency stop latch
+        if keyboard.is_pressed('e'):
+            if not estop_active:
+                estop_active = True
+                emergency_stop()
+                print("emergency stop activated - press r to reset")
+
+        # reset emergency stop
+        if keyboard.is_pressed('r'):
+            if estop_active:
+                estop_active = False
+                print("emergency stop cleared")
+
+        # choose target speed
+        if estop_active:
+            target_speed = 0.0
+        else:
+            speed_mag = medium_speed
+
+            if keyboard.is_pressed('w'):
+                speed_mag = fast_speed
+            elif keyboard.is_pressed('s'):
+                speed_mag = slow_speed
+
+            if keyboard.is_pressed('d') and not keyboard.is_pressed('a'):
+                target_speed = cw_sign * speed_mag
+            elif keyboard.is_pressed('a') and not keyboard.is_pressed('d'):
+                target_speed = ccw_sign * speed_mag
+            else:
+                target_speed = 0.0
+
+        # only send when speed changes
+        if target_speed != last_speed:
+            send_speed_command(target_speed)
+            last_speed = target_speed
+
+        # update graph
+        current_time = time.time() - start_time
+        times.append(current_time)
+        speeds.append(target_speed)
+
+        line.set_xdata(times)
+        line.set_ydata(speeds)
+
+        if len(times) > 1:
+            ax.set_xlim(max(0, times[0]), times[-1] + 0.1)
+        else:
+            ax.set_xlim(0, 5)
+
+        fig.canvas.draw()
+        fig.canvas.flush_events()
+
+        time.sleep(0.03)
+
+except Exception as e:
+    print(f"program error: {e}")
+
+finally:
+    try:
+        keyboard.unhook_all()
+    except Exception:
+        pass
+
+    try:
+        if ser is not None and ser.is_open:
+            ser.close()
+            print("serial port closed")
+    except Exception:
+        pass
+
+    try:
+        if can_bus is not None:
+            can_bus.shutdown()
+            print("can bus closed")
+    except Exception:
+        pass
+
+    try:
+        plt.ioff()
+        plt.close('all')
+    except Exception:
+        pass
