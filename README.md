@@ -4,7 +4,7 @@ this repository contains code and test material for a single leg prototype for a
 
 ## current goal
 
-get a cubemars ak40-10 motor moving from a pc keyboard through uart before moving to stm32 control.
+get a cubemars ak40-10 motor moving from a pc keyboard through **servo-mode uart** before moving toward stm32-based control.
 
 ## hardware used
 
@@ -110,8 +110,14 @@ when the script starts, it will ask you to choose a mode:
 - `2` = serial dry run  
   opens the serial port and shows what would be sent, but does not actually move the motor
 
-- `3` = live motor mode  
-  opens the serial port and sends the real motor command packet
+- `3` = live motor mode (**servo uart**)  
+  opens the serial port and sends the real **servo-mode uart** motor command packet
+
+important note:
+
+- the current live script is written for **servo mode over uart**
+- **mit mode is not the same protocol**
+- cubeMars documents **servo mode serial communication** separately from **mit / force control**, and the MIT interface is tied to **CAN ID**, not the same uart packet path used in this script
 
 ## controls
 
@@ -131,7 +137,32 @@ the script currently uses output shaft speed values in rad/s:
 - medium = `3.0`
 - fast = `4.5`
 
-the script converts these to erpm internally for cubemars servo uart commands.
+the script converts these to **erpm** internally for cubemars servo uart commands.
+
+the ak40-10 has a **10:1 reduction ratio**, and cubemars’s upper computer materials show speed-unit conversion among rpm, erpm, rad/s, and dps. 
+
+## packet format used by the current script
+
+the current live script is based on the documented **cubemars servo mode serial message protocol**.
+
+the packet structure used in the script is:
+
+- frame head = `0x02`
+- data length
+- data frame
+- checksum
+- frame tail = `0x03`
+
+for speed control, the script uses the **servo speed command** with command id:
+
+- `0x08`
+
+cubemars shows example speed-loop packets including:
+
+- `02 05 08 00 00 03 E8 2B 58 03` for `+1000 erpm`
+- `02 05 08 FF FF FC 18 43 78 03` for `-1000 erpm`
+
+the script starts from output shaft speed in **rad/s**, then converts it internally to **erpm** before building the final packet. 
 
 ## recommended testing order
 
@@ -178,6 +209,8 @@ https://www.cubemars.com/technical-support-and-software-download.html
 for this setup:
 - model = **AK40-10**
 - software version = **V1.32**
+
+cubemars’s r-link / upper computer materials show the pc connection workflow, including refreshing ports, selecting the serial connection, and connecting to the motor. 
 
 ## upper computer connection steps
 
@@ -230,6 +263,8 @@ calibrate
 4. the motor may move slightly while phase order is checked
 5. the software should generate a lookup table mapping angle information for the motor
 
+cubemars documents encoder identification / calibration through the upper computer workflow and notes that identification should be done under no-load conditions. 
+
 ## changing can id
 
 each motor needs a unique can id so there is no communication conflict.
@@ -242,23 +277,54 @@ set_can_id XX
 
 replace `XX` with the desired can id number.
 
+cubemars documents can id configuration in the upper computer workflow. 
+
 ## mit mode vs servo mode
 
-**mit mode**:
-- commonly used in quadruped applications
-- easier to operate
-- supports single-loop control such as torque, speed, or position
-
 **servo mode**:
-- gives more accurate torque and position control
-- more commonly used where higher control precision is needed
-- supports dual-loop control
+- this is the mode used by the current python script
+- cubemars documents a **servo mode serial message protocol**
+- this protocol uses a framed **uart / serial** packet format
+- the current script builds this type of packet for live testing
+
+**mit mode**:
+- commonly used in quadruped-style applications
+- cubemars also refers to this as **force control mode**
+- the upper computer MIT interface uses a **CAN ID**
+- position mode uses **position + kp + kd**
+- velocity mode uses **speed + kd**
+- torque mode uses **torque**
+
+in other words, for this repository:
+
+- **servo mode = uart packet workflow used by the current script**
+- **mit mode = separate control workflow and should not be assumed to use the same live uart packet format as mode 3**
+
+cubemars’s MIT / force control documentation shows CAN-based control with packed command fields including desired position, speed, `kp`, `kd`, and current / torque. 
+
+## mit control parameters
+
+if working in **mit mode** through cubemars tools, the main control inputs are different from the current servo-uart script.
+
+cubemars documents the mit / force control interface like this:
+
+- **position mode** uses desired position with **kp** and **kd**
+- **velocity mode** uses desired speed with **kd**
+- **torque mode** uses desired torque
+
+this is one reason mit mode should be treated as a separate workflow from the current live uart script. 
 
 ## using the python script with upper computer
 
-in **mode 3** of the python script, the script sends the real uart motor command packet.
+in **mode 3** of the python script, the script sends a real **servo-mode uart** motor command packet.
 
-during real testing in **mode 3**, the CubeMars Upper Computer should then display the **actual behaviour of the motor**, such as live response and graph movement, as long as the motor and software are connected properly and the serial setup is correct.
+during real testing in **mode 3**, the CubeMars Upper Computer may display the **actual behaviour of the motor**, such as live response and graph movement, if the motor and software are connected properly.
+
+important note:
+
+- the upper computer and the python script usually cannot control the **same serial / com port at the same time**
+- the current live script is intended for **servo uart testing**
+- if using **mit mode**, treat that as a separate control path rather than assuming it is the same as the current uart script
 
 ## modifying the script
 
@@ -279,11 +345,13 @@ recommended rules when modifying the script:
 
 ## important notes
 
-- this script is intended for uart control using a usb serial adapter
-- speeds are treated as output rad/s in the script
-- the script converts rad/s to erpm internally
+- this script is intended for **servo mode uart** control using a usb serial adapter
+- speeds are treated as output **rad/s** in the script
+- the script converts rad/s to **erpm** internally before sending the live packet
+- the current packet builder is based on the documented **servo mode serial** packet structure
 - the motor should be securely mounted before using live motor mode
 - test mode and dry run mode should be used before live motor mode
+- **mit mode** should be treated separately from the current live uart script
 - upper computer can be useful for confirming motor response and viewing live behaviour during setup and testing
 
 ## if packages are missing
@@ -317,6 +385,16 @@ for this setup, the script was run with:
 ```bash
 py "C:\Users\Owner\Downloads\motor_keyboard_test.py"
 ```
+
+## protocol notes used for this project
+
+the current script and notes are based on cubemars documentation describing:
+
+- **servo mode serial message protocol**
+- **servo speed-loop packet examples**
+- **erpm-based speed commands**
+- **mit / force control inputs such as kp and kd**
+- **the upper computer mit interface using can id**
 
 ## project status
 
